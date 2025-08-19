@@ -17,14 +17,12 @@ jobs:
           fetch-tags: true
 
       - name: Debug git
-        working-directory: ${{ github.workspace }}/QMServer
         run: |
           pwd
           ls -la
           git status
 
       - name: Install Python and dependencies
-        working-directory: ${{ github.workspace }}/QMServer
         run: |
           apt-get update
           apt-get install -y python3 python3-pip git
@@ -32,7 +30,6 @@ jobs:
           python3 -m pip install -r requirements-dev.txt --break-system-packages
 
       - name: Run semantic-release
-        working-directory: ${{ github.workspace }}/QMServer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
