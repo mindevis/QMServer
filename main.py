@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from module_manager import clone_or_pull_modules_repository, install_module_from_repository, MODULES_ROOT_DIR
 from typing import Dict
 from pydantic import BaseModel
-import json # Добавьте эту строку
+import json # Добавьте эту строку, если еще нет
 
 class ModuleInfo(BaseModel):
     name: str
@@ -26,47 +26,32 @@ async def startup_event():
     modules_repo_url = os.getenv("MODULES_REPO_URL")
     modules_repo_token = os.getenv("MODULES_REPO_TOKEN")
 
-    # Define SQLite module's default info by reading module.json
     sqlite_module_name = "sqlite_module"
-    module_config_path = os.path.join(MODULES_ROOT_DIR, sqlite_module_name, "module.json")
-    
-    module_data = {
-        "name": "SQLite",
-        "is_free": False, # Will be updated if read from file
-        "is_default": False, # Will be updated if read from file
-        "description": "Default SQLite database module for QMServer."
-    }
 
-    try:
-        if os.path.exists(module_config_path):
-            with open(module_config_path, 'r', encoding='utf-8') as f:
-                loaded_data = json.load(f)
-                module_data.update(loaded_data)
-                print(f"Loaded module metadata from {module_config_path}")
-        else:
-            print(f"Module metadata file not found at {module_config_path}. Using default values.")
-    except Exception as e:
-        print(f"Error loading module metadata from {module_config_path}: {e}. Using default values.")
-
+    # Initialize with default placeholders for now
+    # Actual metadata will be loaded after module installation
     sqlite_module_info = ModuleInfo(
-        name=module_data["name"],
-        is_installed=False, # Will be updated to True upon successful installation
-        is_activated=False, # Will be updated to True upon successful initialization
-        is_free=module_data["is_free"],
-        is_default=module_data["is_default"],
-        description=module_data["description"]
+        name=sqlite_module_name, # Temporary name
+        is_installed=False,
+        is_activated=False,
+        is_free=False,
+        is_default=False,
+        description="Loading module metadata..."
     )
     installed_modules[sqlite_module_name] = sqlite_module_info
 
     if not modules_repo_url or not modules_repo_token:
         print("MODULES_REPO_URL or MODULES_REPO_TOKEN not set. Skipping module repository cloning.")
         # If no repo URL/token, SQLite module is not "installed" via git, but still exists conceptually as default
+        # Update its state if we decide it's conceptually "installed" without cloning
+        installed_modules[sqlite_module_name].description = "Module repository not configured."
         return
 
     # 1. Клонировать или обновить репозиторий модулей
     success = await clone_or_pull_modules_repository(modules_repo_url, modules_repo_token)
     if not success:
         print("Failed to clone or pull modules repository. Modules might not be available.")
+        installed_modules[sqlite_module_name].description = "Failed to clone/pull module repository."
         return
 
     # 2. Установить SQLite Module
@@ -74,8 +59,26 @@ async def startup_event():
     install_success = await install_module_from_repository(sqlite_module_name)
 
     if install_success:
-        print(f"Module {sqlite_module_name} installed successfully. Attempting to load and initialize.")
+        print(f"Module {sqlite_module_name} installed successfully. Attempting to load metadata and initialize.")
         installed_modules[sqlite_module_name].is_installed = True
+
+        # Load module metadata from module.json AFTER installation
+        module_config_path = os.path.join(MODULES_ROOT_DIR, sqlite_module_name, "module.json")
+        try:
+            if os.path.exists(module_config_path):
+                with open(module_config_path, 'r', encoding='utf-8') as f:
+                    loaded_data = json.load(f)
+                    # Update module info with data from module.json
+                    installed_modules[sqlite_module_name].name = loaded_data.get("name", sqlite_module_name)
+                    installed_modules[sqlite_module_name].is_free = loaded_data.get("is_free", False)
+                    installed_modules[sqlite_module_name].is_default = loaded_data.get("is_default", False)
+                    installed_modules[sqlite_module_name].description = loaded_data.get("description", "No description provided.")
+                    print(f"Loaded module metadata from {module_config_path}")
+            else:
+                print(f"Module metadata file not found at {module_config_path} after installation. Using default values.")
+        except Exception as e:
+            print(f"Error loading module metadata from {module_config_path}: {e}. Using default values.")
+
         # 3. Динамически импортировать и инициализировать SQLite Module
         try:
             module_path = os.path.join(MODULES_ROOT_DIR, sqlite_module_name, "main.py")
@@ -94,8 +97,10 @@ async def startup_event():
 
         except Exception as e:
             print(f"Error loading or initializing SQLite Module ({sqlite_module_name}): {e}")
+            installed_modules[sqlite_module_name].description += " (Initialization failed)" # Add more context to description
     else:
         print(f"Failed to install SQLite Module ({sqlite_module_name}).")
+        installed_modules[sqlite_module_name].description += " (Installation failed)" # Add more context to description
 
 
 @app.get("/modules", response_model=Dict[str, ModuleInfo])
