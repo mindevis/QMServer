@@ -17,27 +17,27 @@ jobs:
           fetch-tags: true
 
       - name: Install System Dependencies (Python, Pip, Git)
-        working-directory: /github/workspace
         run: |
+          cd /github/workspace && \
           apt-get update
           apt-get install -y python3 python3-pip git
 
       - name: Debug git
-        working-directory: /github/workspace
         run: |
+          cd /github/workspace && \
           pwd
           ls -la
           git status
 
       - name: Install Python Package Dependencies
-        working-directory: /github/workspace
         run: |
+          cd /github/workspace && \ 
           python3 -m pip install --upgrade pip --break-system-packages
           python3 -m pip install -r requirements-dev.txt --break-system-packages
 
       - name: Run semantic-release
-        working-directory: /github/workspace
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          cd /github/workspace && \
           python3 -m semantic_release publish
