@@ -9,9 +9,9 @@ TEMP_REPO_CLONE_DIR = os.path.join(MODULES_ROOT_DIR, "temp_repo_clone")
 
 
 async def clone_or_pull_modules_repository(repo_url: str, repo_token: str) -> bool:
-    """
-    Clones or pulls the entire modules repository into a temporary directory,
-    using PAT for authentication.
+    """Clones or pulls the entire modules repository into a temporary directory.
+
+    Using PAT for authentication.
     """
     if not os.path.exists(MODULES_ROOT_DIR):
         os.makedirs(MODULES_ROOT_DIR)
@@ -41,9 +41,9 @@ async def clone_or_pull_modules_repository(repo_url: str, repo_token: str) -> bo
 
 
 async def install_module_from_repository(module_name: str, repo_path: str = TEMP_REPO_CLONE_DIR) -> bool:
-    """
-    Installs a specific module (directory) from the cloned repository's 'main' branch
-    into the QMServer/modules/<module_name> directory.
+    """Installs a specific module (directory) from the cloned repository's 'main' branch.
+
+    Into the QMServer/modules/<module_name> directory.
     """
     module_source_path = os.path.join(repo_path, module_name)  # Path to the module directory within the cloned repo
     module_dest_path = os.path.join(MODULES_ROOT_DIR, module_name)

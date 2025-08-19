@@ -2,7 +2,7 @@
 line-length = 120
 target-version = "py313"
 
-[tool.ruff.lint] # Измените эту строку
+[tool.ruff.lint]
 select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
@@ -22,5 +22,5 @@ ignore = [
     "D107", # Missing docstring in __init__
 ]
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "google"
