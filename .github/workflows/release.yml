@@ -8,36 +8,25 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    container:
-      image: debian:bookworm
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Install System Dependencies (Python, Pip, Git)
-        run: |
-          cd /github/workspace && \
-          apt-get update
-          apt-get install -y python3 python3-pip git
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
 
-      - name: Debug git
+      - name: Install dependencies
         run: |
-          cd /github/workspace && \
-          pwd
-          ls -la
-          git status
-
-      - name: Install Python Package Dependencies
-        run: |
-          cd /github/workspace && \ 
-          python3 -m pip install --upgrade pip --break-system-packages
-          python3 -m pip install -r requirements-dev.txt --break-system-packages
+          python -m pip install --upgrade pip --break-system-packages
+          python -m pip install -r requirements-dev.txt --break-system-packages
 
       - name: Run semantic-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd /github/workspace && \
-          python3 -m semantic_release publish
+          python -m semantic_release publish
