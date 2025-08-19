@@ -1,0 +1,27 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bookworm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python and dependencies
+        run: |
+          apt-get update
+          apt-get install -y python3 python3-pip git
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements-dev.txt
+
+      - name: Run semantic-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 -m semantic_release publish
