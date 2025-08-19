@@ -15,7 +15,9 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+
       - name: Debug git
+        working-directory: ${{ github.workspace }}/QMServer
         run: |
           pwd
           ls -la
