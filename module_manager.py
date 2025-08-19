@@ -1,8 +1,8 @@
-import os
 import asyncio
+import os
 import shutil
-from git import Repo, GitCommandError
 
+from git import GitCommandError, Repo
 
 MODULES_ROOT_DIR = "./modules"  # This will be the final destination for installed modules
 TEMP_REPO_CLONE_DIR = os.path.join(MODULES_ROOT_DIR, "temp_repo_clone")

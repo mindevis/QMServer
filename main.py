@@ -1,10 +1,11 @@
-import os
 import importlib.util
 import json
-from typing import Dict
+import os
+
 from fastapi import FastAPI, HTTPException
-from module_manager import clone_or_pull_modules_repository, install_module_from_repository, MODULES_ROOT_DIR
 from pydantic import BaseModel
+
+from module_manager import MODULES_ROOT_DIR, clone_or_pull_modules_repository, install_module_from_repository
 
 
 class ModuleInfo(BaseModel):
@@ -18,7 +19,7 @@ class ModuleInfo(BaseModel):
 
 
 # Global dictionary to store module information
-installed_modules: Dict[str, ModuleInfo] = {}
+installed_modules: dict[str, ModuleInfo] = {}
 
 app = FastAPI()
 
@@ -69,7 +70,7 @@ async def startup_event():
         module_config_path = os.path.join(MODULES_ROOT_DIR, sqlite_module_name, "module.json")
         try:
             if os.path.exists(module_config_path):
-                with open(module_config_path, 'r', encoding='utf-8') as f:
+                with open(module_config_path, encoding='utf-8') as f:
                     loaded_data = json.load(f)
                     # Update module info with data from module.json
                     installed_modules[sqlite_module_name].name = loaded_data.get("name", sqlite_module_name)
@@ -108,7 +109,7 @@ async def startup_event():
         installed_modules[sqlite_module_name].description += " (Installation failed)"
 
 
-@app.get("/modules", response_model=Dict[str, ModuleInfo])
+@app.get("/modules", response_model=dict[str, ModuleInfo])
 async def get_modules():
     """Returns a dictionary of all installed modules with their details."""
     return installed_modules
