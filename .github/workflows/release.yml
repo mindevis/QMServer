@@ -15,25 +15,29 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+          path: /app
 
       - name: Install System Dependencies (Python, Pip, Git)
+        working-directory: /app
         run: |
           apt-get update
           apt-get install -y python3 python3-pip git
-          # Устанавливаем git и Python здесь, до использования команд git или pip
 
-      - name: Debug git # <-- Теперь git будет найден
+      - name: Debug git
+        working-directory: /app
         run: |
           pwd
           ls -la
           git status
 
       - name: Install Python Package Dependencies
+        working-directory: /app
         run: |
           python3 -m pip install --upgrade pip --break-system-packages
           python3 -m pip install -r requirements-dev.txt --break-system-packages
 
       - name: Run semantic-release
+        working-directory: /app
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
