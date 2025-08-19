@@ -1,16 +1,22 @@
 import os
 import asyncio
-from git import Repo, GitCommandError
 import shutil
+from git import Repo, GitCommandError
 
-MODULES_ROOT_DIR = "./modules" # This will be the final destination for installed modules
+
+MODULES_ROOT_DIR = "./modules"  # This will be the final destination for installed modules
 TEMP_REPO_CLONE_DIR = os.path.join(MODULES_ROOT_DIR, "temp_repo_clone")
 
+
 async def clone_or_pull_modules_repository(repo_url: str, repo_token: str) -> bool:
-    """Clones or pulls the entire modules repository into a temporary directory, using PAT for authentication."""
+    """
+    Clones or pulls the entire modules repository into a temporary directory,
+    using PAT for authentication.
+    """
     if not os.path.exists(MODULES_ROOT_DIR):
         os.makedirs(MODULES_ROOT_DIR)
 
+    # Always create the authenticated URL for consistency
     auth_repo_url = repo_url.replace("https://", f"https://oauth2:{repo_token}@")
 
     try:
@@ -18,6 +24,7 @@ async def clone_or_pull_modules_repository(repo_url: str, repo_token: str) -> bo
             repo = Repo(TEMP_REPO_CLONE_DIR)
             print(f"Pulling latest changes for {repo_url}...")
             origin = repo.remotes.origin
+            # Update the remote URL to ensure PAT is used for pull
             origin.set_url(auth_repo_url)
             await asyncio.to_thread(origin.pull)
         else:
@@ -32,17 +39,18 @@ async def clone_or_pull_modules_repository(repo_url: str, repo_token: str) -> bo
         return False
     return True
 
+
 async def install_module_from_repository(module_name: str, repo_path: str = TEMP_REPO_CLONE_DIR) -> bool:
     """
     Installs a specific module (directory) from the cloned repository's 'main' branch
     into the QMServer/modules/<module_name> directory.
     """
-    module_source_path = os.path.join(repo_path, module_name) # Path to the module directory within the cloned repo
+    module_source_path = os.path.join(repo_path, module_name)  # Path to the module directory within the cloned repo
     module_dest_path = os.path.join(MODULES_ROOT_DIR, module_name)
-    
+
     if os.path.exists(module_dest_path):
         print(f"Module {module_name} already exists at {module_dest_path}. Overwriting...")
-        shutil.rmtree(module_dest_path) # Remove existing to ensure clean copy
+        shutil.rmtree(module_dest_path)  # Remove existing to ensure clean copy
 
     try:
         if os.path.exists(module_source_path) and os.path.isdir(module_source_path):
@@ -53,10 +61,11 @@ async def install_module_from_repository(module_name: str, repo_path: str = TEMP
         else:
             print(f"Module directory '{module_name}' not found at '{module_source_path}' in the cloned repository.")
             return False
-            
+
     except Exception as e:
         print(f"An unexpected error occurred during module installation: {e}")
         return False
+
 
 async def get_available_modules(repo_path: str = TEMP_REPO_CLONE_DIR) -> list[str]:
     """Retrieves a list of available modules (directories) from the cloned repository."""
