@@ -1,0 +1,24 @@
+# Byte-code files
+*.pyc
+__pycache__/
+
+# Ruff cache
+.ruff_cache/
+
+# Editor/IDE files
+.vscode/
+.idea/
+
+# Environment
+.venv/
+venv/
+env/
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Other common ignored files
+.DS_Store
+.env
