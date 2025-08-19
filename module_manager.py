@@ -7,20 +7,23 @@ MODULES_ROOT_DIR = "./modules" # This will be the final destination for installe
 TEMP_REPO_CLONE_DIR = os.path.join(MODULES_ROOT_DIR, "temp_repo_clone")
 
 async def clone_or_pull_modules_repository(repo_url: str, repo_token: str) -> bool:
-    """Clones or pulls the entire modules repository into a temporary directory."""
+    """Clones or pulls the entire modules repository into a temporary directory, using PAT for authentication."""
     if not os.path.exists(MODULES_ROOT_DIR):
         os.makedirs(MODULES_ROOT_DIR)
+
+    # Always create the authenticated URL for consistency
+    auth_repo_url = repo_url.replace("https://", f"https://oauth2:{repo_token}@")
 
     try:
         if os.path.exists(TEMP_REPO_CLONE_DIR):
             repo = Repo(TEMP_REPO_CLONE_DIR)
             print(f"Pulling latest changes for {repo_url}...")
             origin = repo.remotes.origin
-            await asyncio.to_thread(origin.pull) # Run blocking git operation in a separate thread
+            # Update the remote URL to ensure PAT is used for pull
+            origin.set_url(auth_repo_url) 
+            await asyncio.to_thread(origin.pull)
         else:
             print(f"Cloning {repo_url} into {TEMP_REPO_CLONE_DIR}...")
-            # Construct the URL with token for authentication
-            auth_repo_url = repo_url.replace("https://", f"https://oauth2:{repo_token}@")
             await asyncio.to_thread(Repo.clone_from, auth_repo_url, TEMP_REPO_CLONE_DIR)
         print(f"Repository {repo_url} updated successfully.")
     except GitCommandError as e:
