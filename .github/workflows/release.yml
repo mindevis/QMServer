@@ -16,16 +16,20 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Debug git
+      - name: Install System Dependencies (Python, Pip, Git)
+        run: |
+          apt-get update
+          apt-get install -y python3 python3-pip git
+          # Устанавливаем git и Python здесь, до использования команд git или pip
+
+      - name: Debug git # <-- Теперь git будет найден
         run: |
           pwd
           ls -la
           git status
 
-      - name: Install Python and dependencies
+      - name: Install Python Package Dependencies
         run: |
-          apt-get update
-          apt-get install -y python3 python3-pip git
           python3 -m pip install --upgrade pip --break-system-packages
           python3 -m pip install -r requirements-dev.txt --break-system-packages
 
