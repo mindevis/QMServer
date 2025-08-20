@@ -1,12 +1,54 @@
 import importlib.util
 import json
 import os
+import sys
+from contextlib import asynccontextmanager
+from loguru import logger
+import logging
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+import uvicorn
 
 from module_manager import MODULES_ROOT_DIR, clone_or_pull_module_branch, install_module_from_repository
 
+# Get app_log_level globally
+app_log_level = os.getenv("APP_LOG_LEVEL", "INFO").upper()
+
+# Intercept standard logging to Loguru
+class InterceptHandler(logging.Handler):
+    def emit(self, record):
+        # Get corresponding Loguru level if it exists
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+
+        # Find caller from where originated the logged message
+        frame, depth = logging.currentframe(), 6 # Adjusted depth
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+        
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
+def setup_logging_integration():
+    # Remove default Loguru handler to avoid duplication
+    logger.remove()
+    # Add Loguru handler with custom format and dynamic level
+    logger.add(sys.stderr, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> <level>{level: <5}</level>- <level>{message}</level>", enqueue=True, backtrace=True, diagnose=True, level=app_log_level)
+
+    # Set up the root Python logger to use our InterceptHandler
+    logging.basicConfig(handlers=[InterceptHandler()], level=0)
+
+    # Disable propagation for Uvicorn loggers to prevent double logging
+    for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+        uvicorn_logger = logging.getLogger(name)
+        uvicorn_logger.handlers = []
+        uvicorn_logger.propagate = False
+
+# Call setup_logging_integration() at the very beginning of the script
+setup_logging_integration()
 
 class ModuleInfo(BaseModel):
     """Information about a QMServer module."""
@@ -21,13 +63,11 @@ class ModuleInfo(BaseModel):
 # Global dictionary to store module information
 installed_modules: dict[str, ModuleInfo] = {}
 
-app = FastAPI()
 
-
-@app.on_event("startup")
-async def startup_event():
-    """Initializes QMServer modules on application startup."""
-    print("QMServer startup event triggered. Initializing modules...")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handles application startup and shutdown events."""
+    logger.info("QMServer lifespan startup event triggered. Initializing modules...")
     global installed_modules
     modules_repo_url = os.getenv("MODULES_REPO_URL")
     modules_repo_token = os.getenv("MODULES_REPO_TOKEN")
@@ -47,23 +87,25 @@ async def startup_event():
     installed_modules[sqlite_module_name] = sqlite_module_info
 
     if not modules_repo_url or not modules_repo_token:
-        print("MODULES_REPO_URL or MODULES_REPO_TOKEN not set. Skipping module repository cloning.")
+        logger.warning("MODULES_REPO_URL or MODULES_REPO_TOKEN not set. Skipping module repository cloning.")
         installed_modules[sqlite_module_name].description = "Module repository not configured."
+        yield
         return
 
-    # 1. Клонировать или обновить ветку модуля
+    # 1. Clone or update module branch
     cloned_module_path = await clone_or_pull_module_branch(modules_repo_url, modules_repo_token, sqlite_module_name)
     if not cloned_module_path:
-        print(f"Failed to clone or pull module branch {sqlite_module_name}. Module might not be available.")
+        logger.error(f"Failed to clone or pull module branch {sqlite_module_name}. Module might not be available.")
         installed_modules[sqlite_module_name].description = "Failed to clone/pull module branch."
+        yield
         return
 
-    # 2. Установить SQLite Module из клонированной ветки
-    print(f"Attempting to install default module: {sqlite_module_name}")
+    # 2. Install SQLite Module from the cloned branch
+    logger.info(f"Attempting to install default module: {sqlite_module_name}")
     install_success = await install_module_from_repository(sqlite_module_name, cloned_module_path)
 
     if install_success:
-        print(f"Module {sqlite_module_name} installed successfully. Attempting to load metadata and initialize.")
+        logger.info(f"Module {sqlite_module_name} installed successfully. Attempting to load metadata and initialize.")
         installed_modules[sqlite_module_name].is_installed = True
 
         # Load module metadata from module.json AFTER installation
@@ -79,14 +121,14 @@ async def startup_event():
                     installed_modules[sqlite_module_name].is_default = loaded_data.get("is_default", False)
                     installed_modules[sqlite_module_name].description = loaded_data.get("description",
                                                                                         "No description provided.")
-                    print(f"Loaded module metadata from {module_config_path}")
+                    logger.info(f"Loaded module metadata from {module_config_path}")
             else:
-                print(f"Module metadata file not found at {module_config_path} after installation."
-                      " Using default values.")
+                logger.warning(f"Module metadata file not found at {module_config_path} after installation."
+                               " Using default values.")
         except Exception as e:
-            print(f"Error loading module metadata from {module_config_path}: {e}. Using default values.")
+            logger.error(f"Error loading module metadata from {module_config_path}: {e}. Using default values.")
 
-        # 3. Динамически импортировать и инициализировать SQLite Module
+        # 3. Dynamically import and initialize SQLite Module
         # Now main.py is directly in the cloned_module_path, not a subdirectory.
         try:
             module_path = os.path.join(MODULES_ROOT_DIR, sqlite_module_name, "main.py")
@@ -96,19 +138,26 @@ async def startup_event():
                 spec.loader.exec_module(module)
                 if hasattr(module, "init_database"):
                     module.init_database()
-                    print(f"SQLite Module ({sqlite_module_name}) initialized.")
                     installed_modules[sqlite_module_name].is_activated = True
                 else:
-                    print(f"SQLite Module ({sqlite_module_name}) does not have an init_database function.")
+                    logger.warning(f"SQLite Module ({sqlite_module_name}) does not have an init_database function.")
             else:
-                print(f"Failed to load spec for {sqlite_module_name}.")
+                logger.error(f"Failed to load spec for {sqlite_module_name}.")
 
         except Exception as e:
-            print(f"Error loading or initializing SQLite Module ({sqlite_module_name}): {e}")
+            logger.error(f"Error loading or initializing SQLite Module ({sqlite_module_name}): {e}")
             installed_modules[sqlite_module_name].description += " (Initialization failed)"
     else:
-        print(f"Failed to install SQLite Module ({sqlite_module_name}).")
+        logger.error(f"Failed to install SQLite Module ({sqlite_module_name}).")
         installed_modules[sqlite_module_name].description += " (Installation failed)"
+
+    yield  # Application startup is complete, now yield control to FastAPI
+
+    # Code after yield will run on shutdown (if needed)
+    logger.info("QMServer lifespan shutdown event triggered.")
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/modules", response_model=dict[str, ModuleInfo])
@@ -129,3 +178,8 @@ async def get_module_details(module_name: str):
 async def read_root():
     """Root endpoint for QMServer."""
     return {"message": "QMServer is running and modules initialization attempted."}
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level=app_log_level.lower(), log_config=None)
+

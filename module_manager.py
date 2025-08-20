@@ -3,6 +3,7 @@ import os
 import shutil
 
 from git import GitCommandError, Repo
+from loguru import logger
 
 MODULES_ROOT_DIR = "./modules"  # This will be the final destination for installed modules
 
@@ -11,7 +12,7 @@ async def clone_or_pull_module_branch(repo_url: str, repo_token: str, branch_nam
 
     Using PAT for authentication. Returns the path to the cloned directory on success.
     """
-    module_clone_dir = os.path.join(MODULES_ROOT_DIR, "temp_clones", branch_name)
+    module_clone_dir = os.path.join("/tmp/", "qmserver_module_clones", branch_name)
 
     if not os.path.exists(MODULES_ROOT_DIR):
         os.makedirs(MODULES_ROOT_DIR)
@@ -20,7 +21,7 @@ async def clone_or_pull_module_branch(repo_url: str, repo_token: str, branch_nam
 
     try:
         if os.path.exists(module_clone_dir):
-            print(f"Directory {module_clone_dir} already exists. Pulling latest for branch {branch_name}...")
+            logger.debug(f"Directory {module_clone_dir} already exists. Pulling latest for branch {branch_name}...")
             repo = Repo(module_clone_dir)
             origin = repo.remotes.origin
             origin.set_url(auth_repo_url)  # Ensure PAT is used for pull
@@ -30,17 +31,17 @@ async def clone_or_pull_module_branch(repo_url: str, repo_token: str, branch_nam
             await asyncio.to_thread(repo.git.checkout, branch_name)
             await asyncio.to_thread(origin.pull)
         else:
-            print(f"Cloning {repo_url} branch {branch_name} into {module_clone_dir}...")
+            logger.debug(f"Cloning {repo_url} branch {branch_name} into {module_clone_dir}...")
             await asyncio.to_thread(Repo.clone_from, auth_repo_url, module_clone_dir, branch=branch_name)
 
-        print(f"Repository branch {branch_name} updated successfully in {module_clone_dir}.")
+        logger.debug(f"Repository branch {branch_name} updated successfully in {module_clone_dir}.")
         return module_clone_dir
 
     except GitCommandError as e:
-        print(f"Error cloning/pulling repository branch {branch_name}: {e}")
+        logger.error(f"Error cloning/pulling repository branch {branch_name}: {e}")
         return None
     except Exception as e:
-        print(f"An unexpected error occurred during repository operation for branch {branch_name}: {e}")
+        logger.error(f"An unexpected error occurred during repository operation for branch {branch_name}: {e}")
         return None
 
 async def install_module_from_repository(module_name: str, cloned_module_path: str) -> bool:
@@ -52,7 +53,7 @@ async def install_module_from_repository(module_name: str, cloned_module_path: s
     module_dest_path = os.path.join(MODULES_ROOT_DIR, module_name)
 
     if os.path.exists(module_dest_path):
-        print(f"Module {module_name} already exists at {module_dest_path}. Overwriting...")
+        logger.debug(f"Module {module_name} already exists at {module_dest_path}. Overwriting...")
         shutil.rmtree(module_dest_path)  # Remove existing to ensure clean copy
 
     try:
@@ -68,11 +69,11 @@ async def install_module_from_repository(module_name: str, cloned_module_path: s
             else:
                 shutil.copy2(s, d)
 
-        print(f"Module {module_name} installed successfully from {cloned_module_path} to {module_dest_path}.")
+        logger.debug(f"Module {module_name} installed successfully from {cloned_module_path} to {module_dest_path}.")
         return True
 
     except Exception as e:
-        print(f"An unexpected error occurred during module installation for {module_name}: {e}")
+        logger.error(f"An unexpected error occurred during module installation for {module_name}: {e}")
         return False
 
 
@@ -88,8 +89,8 @@ async def get_available_modules(repo_path: str) -> list[str]:
         # as QMServer will explicitly request branches (modules) by name.
         # If it were to list, it would need to interact with the Git repository
         # to list its remote branches.
-        print("Function get_available_modules is called but may not be relevant for branch-based modules.")
+        logger.debug("Function get_available_modules is called but may not be relevant for branch-based modules.")
         return []
     except Exception as e:
-        print(f"An unexpected error occurred while fetching available modules: {e}")
+        logger.error(f"An unexpected error occurred while fetching available modules: {e}")
         return []
