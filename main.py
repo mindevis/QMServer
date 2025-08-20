@@ -5,7 +5,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from module_manager import MODULES_ROOT_DIR, clone_or_pull_modules_repository, install_module_from_repository
+from module_manager import MODULES_ROOT_DIR, clone_or_pull_module_branch, install_module_from_repository
 
 
 class ModuleInfo(BaseModel):
@@ -32,7 +32,7 @@ async def startup_event():
     modules_repo_url = os.getenv("MODULES_REPO_URL")
     modules_repo_token = os.getenv("MODULES_REPO_TOKEN")
 
-    sqlite_module_name = "sqlite_module"
+    sqlite_module_name = "sqlite"
 
     # Initialize with default placeholders for now
     # Actual metadata will be loaded after module installation
@@ -51,33 +51,34 @@ async def startup_event():
         installed_modules[sqlite_module_name].description = "Module repository not configured."
         return
 
-    # 1. Клонировать или обновить репозиторий модулей
-    success = await clone_or_pull_modules_repository(modules_repo_url, modules_repo_token)
-    if not success:
-        print("Failed to clone or pull modules repository. Modules might not be available.")
-        installed_modules[sqlite_module_name].description = "Failed to clone/pull module repository."
+    # 1. Клонировать или обновить ветку модуля
+    cloned_module_path = await clone_or_pull_module_branch(modules_repo_url, modules_repo_token, sqlite_module_name)
+    if not cloned_module_path:
+        print(f"Failed to clone or pull module branch {sqlite_module_name}. Module might not be available.")
+        installed_modules[sqlite_module_name].description = "Failed to clone/pull module branch."
         return
 
-    # 2. Установить SQLite Module
+    # 2. Установить SQLite Module из клонированной ветки
     print(f"Attempting to install default module: {sqlite_module_name}")
-    install_success = await install_module_from_repository(sqlite_module_name)
+    install_success = await install_module_from_repository(sqlite_module_name, cloned_module_path)
 
     if install_success:
         print(f"Module {sqlite_module_name} installed successfully. Attempting to load metadata and initialize.")
         installed_modules[sqlite_module_name].is_installed = True
 
         # Load module metadata from module.json AFTER installation
+        # Now module.json is directly in the cloned_module_path, not a subdirectory.
         module_config_path = os.path.join(MODULES_ROOT_DIR, sqlite_module_name, "module.json")
         try:
             if os.path.exists(module_config_path):
-                with open(module_config_path, encoding='utf-8') as f:
+                with open(module_config_path) as f:
                     loaded_data = json.load(f)
                     # Update module info with data from module.json
                     installed_modules[sqlite_module_name].name = loaded_data.get("name", sqlite_module_name)
                     installed_modules[sqlite_module_name].is_free = loaded_data.get("is_free", False)
                     installed_modules[sqlite_module_name].is_default = loaded_data.get("is_default", False)
                     installed_modules[sqlite_module_name].description = loaded_data.get("description",
-                                                                                            "No description provided.")
+                                                                                        "No description provided.")
                     print(f"Loaded module metadata from {module_config_path}")
             else:
                 print(f"Module metadata file not found at {module_config_path} after installation."
@@ -86,6 +87,7 @@ async def startup_event():
             print(f"Error loading module metadata from {module_config_path}: {e}. Using default values.")
 
         # 3. Динамически импортировать и инициализировать SQLite Module
+        # Now main.py is directly in the cloned_module_path, not a subdirectory.
         try:
             module_path = os.path.join(MODULES_ROOT_DIR, sqlite_module_name, "main.py")
             spec = importlib.util.spec_from_file_location(sqlite_module_name, module_path)

@@ -5,47 +5,50 @@ import shutil
 from git import GitCommandError, Repo
 
 MODULES_ROOT_DIR = "./modules"  # This will be the final destination for installed modules
-TEMP_REPO_CLONE_DIR = os.path.join(MODULES_ROOT_DIR, "temp_repo_clone")
 
+async def clone_or_pull_module_branch(repo_url: str, repo_token: str, branch_name: str) -> str | None:
+    """Clones or pulls a specific module branch into a temporary directory.
 
-async def clone_or_pull_modules_repository(repo_url: str, repo_token: str) -> bool:
-    """Clones or pulls the entire modules repository into a temporary directory.
-
-    Using PAT for authentication.
+    Using PAT for authentication. Returns the path to the cloned directory on success.
     """
+    module_clone_dir = os.path.join(MODULES_ROOT_DIR, "temp_clones", branch_name)
+
     if not os.path.exists(MODULES_ROOT_DIR):
         os.makedirs(MODULES_ROOT_DIR)
 
-    # Always create the authenticated URL for consistency
     auth_repo_url = repo_url.replace("https://", f"https://oauth2:{repo_token}@")
 
     try:
-        if os.path.exists(TEMP_REPO_CLONE_DIR):
-            repo = Repo(TEMP_REPO_CLONE_DIR)
-            print(f"Pulling latest changes for {repo_url}...")
+        if os.path.exists(module_clone_dir):
+            print(f"Directory {module_clone_dir} already exists. Pulling latest for branch {branch_name}...")
+            repo = Repo(module_clone_dir)
             origin = repo.remotes.origin
-            # Update the remote URL to ensure PAT is used for pull
-            origin.set_url(auth_repo_url)
+            origin.set_url(auth_repo_url)  # Ensure PAT is used for pull
+            # Fetch all, then hard reset to ensure we are on the correct branch and updated.
+            await asyncio.to_thread(origin.fetch)
+            # Ensure we are on the correct branch before pulling
+            await asyncio.to_thread(repo.git.checkout, branch_name)
             await asyncio.to_thread(origin.pull)
         else:
-            print(f"Cloning {repo_url} into {TEMP_REPO_CLONE_DIR}...")
-            await asyncio.to_thread(Repo.clone_from, auth_repo_url, TEMP_REPO_CLONE_DIR)
-        print(f"Repository {repo_url} updated successfully.")
+            print(f"Cloning {repo_url} branch {branch_name} into {module_clone_dir}...")
+            await asyncio.to_thread(Repo.clone_from, auth_repo_url, module_clone_dir, branch=branch_name)
+
+        print(f"Repository branch {branch_name} updated successfully in {module_clone_dir}.")
+        return module_clone_dir
+
     except GitCommandError as e:
-        print(f"Error cloning/pulling repository {repo_url}: {e}")
-        return False
+        print(f"Error cloning/pulling repository branch {branch_name}: {e}")
+        return None
     except Exception as e:
-        print(f"An unexpected error occurred during repository operation: {e}")
-        return False
-    return True
+        print(f"An unexpected error occurred during repository operation for branch {branch_name}: {e}")
+        return None
 
+async def install_module_from_repository(module_name: str, cloned_module_path: str) -> bool:
+    """Installs a specific module from its cloned branch directory.
 
-async def install_module_from_repository(module_name: str, repo_path: str = TEMP_REPO_CLONE_DIR) -> bool:
-    """Installs a specific module (directory) from the cloned repository's 'main' branch.
-
-    Into the QMServer/modules/<module_name> directory.
+    Copies the contents of the cloned branch (which is the module itself) into
+    the QMServer/modules/<module_name> directory.
     """
-    module_source_path = os.path.join(repo_path, module_name)  # Path to the module directory within the cloned repo
     module_dest_path = os.path.join(MODULES_ROOT_DIR, module_name)
 
     if os.path.exists(module_dest_path):
@@ -53,27 +56,40 @@ async def install_module_from_repository(module_name: str, repo_path: str = TEMP
         shutil.rmtree(module_dest_path)  # Remove existing to ensure clean copy
 
     try:
-        if os.path.exists(module_source_path) and os.path.isdir(module_source_path):
-            print(f"Copying module '{module_name}' from '{module_source_path}' to '{module_dest_path}'...")
-            shutil.copytree(module_source_path, module_dest_path)
-            print(f"Module {module_name} installed successfully.")
-            return True
-        else:
-            print(f"Module directory '{module_name}' not found at '{module_source_path}' in the cloned repository.")
-            return False
+        # Create the destination directory first
+        os.makedirs(module_dest_path, exist_ok=True)
+
+        # Copy contents of the cloned_module_path (the root of the branch) into the destination
+        for item in os.listdir(cloned_module_path):
+            s = os.path.join(cloned_module_path, item)
+            d = os.path.join(module_dest_path, item)
+            if os.path.isdir(s):
+                shutil.copytree(s, d, dirs_exist_ok=True)
+            else:
+                shutil.copy2(s, d)
+
+        print(f"Module {module_name} installed successfully from {cloned_module_path} to {module_dest_path}.")
+        return True
 
     except Exception as e:
-        print(f"An unexpected error occurred during module installation: {e}")
+        print(f"An unexpected error occurred during module installation for {module_name}: {e}")
         return False
 
 
-async def get_available_modules(repo_path: str = TEMP_REPO_CLONE_DIR) -> list[str]:
-    """Retrieves a list of available modules (directories) from the cloned repository."""
+# This function might not be strictly needed anymore if modules are branches,
+# but keeping it for completeness or future use if we list branches.
+async def get_available_modules(repo_path: str) -> list[str]:
+    """Retrieves a list of available modules (branches) from the cloned repository.
+
+    Note: This function might need re-evaluation based on how we manage multiple modules/branches.
+    """
     try:
-        # Assuming modules are top-level directories within the cloned repo
-        modules = [d for d in os.listdir(repo_path) if os.path.isdir(os.path.join(repo_path, d)) and d != ".git"]
-        print(f"Found available modules: {modules}")
-        return modules
+        # For this new architecture, this function is less relevant for listing branches
+        # as QMServer will explicitly request branches (modules) by name.
+        # If it were to list, it would need to interact with the Git repository
+        # to list its remote branches.
+        print("Function get_available_modules is called but may not be relevant for branch-based modules.")
+        return []
     except Exception as e:
         print(f"An unexpected error occurred while fetching available modules: {e}")
         return []
