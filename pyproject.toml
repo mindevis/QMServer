@@ -1,12 +1,34 @@
-branch = "main"
-upload_to_pypi = false
-changelog_file = "CHANGELOG.md"
-build_command = ""
-
 [tool.semantic_release]
-version_variable = [
-    "QMServer/__init__.py:__version__"
+version_variables = [
+    "__init__.py:__version__:nf"
 ]
+upload_to_pypi = false
+build_command = ""
+tag_format = "v{version}"
+allow_zero_version = true
+commit_parser = "conventional"
+commit_message = "chore(release): v{version} [skip ci]"
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
+
+[tool.semantic_release.changelog]
+template_dir = "templates"
+changelog_template = "CHANGELOG.md.j2"
+changelog_components = ["bug fixes", "features", "performance", "documentation", "style", "refactor", "test", "chore"]
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
+
+[tool.semantic_release.remote]
+type = "github"
+
+[tool.semantic_release.commit_parser_options]
+major_tags = ["BREAKING CHANGE"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+allowed_tags = ["feat", "fix", "docs", "style", "refactor", "perf", "test", "chore"]
 
 [tool.ruff]
 line-length = 120

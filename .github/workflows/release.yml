@@ -4,11 +4,16 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - '__init__.py'
 
 jobs:
   release:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,8 +30,12 @@ jobs:
           python -m pip install --upgrade pip --break-system-packages
           python -m pip install -r requirements-dev.txt --break-system-packages
 
-      - name: Run semantic-release
+      - name: Run semantic-release version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python -m semantic_release publish
+        run: python -m semantic_release version
+
+      - name: Run semantic-release publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m semantic_release publish
