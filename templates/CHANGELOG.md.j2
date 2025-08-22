@@ -7,7 +7,7 @@
 ### {{ section.name | title }}
 
 {% for commit in section.commits %}
-* {{ commit.type | capitalize }}: {{ commit.subject }} ([{{ commit.hash[:7] }}](https://github.com/mindevis/QMServerModules/commit/{{ commit.hash }}))
+* {{ commit.type | capitalize }}: {{ commit.subject }} ([{{ commit.hash[:7] }}](https://github.com/mindevis/QMServer/commit/{{ commit.hash }}))
 {%- if commit.body %}
   {{ commit.body | indent(2) }}
 {%- endif %}
