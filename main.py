@@ -6,6 +6,7 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 import api.router.admin
@@ -150,21 +151,6 @@ async def lifespan(app: FastAPI):
                     )
 
                 # Ensure installed_modules has correct info from loaded module after initialization
-                if sqlite_module_name not in installed_modules:
-                    installed_modules[sqlite_module_name] = ModuleInfo(
-                        name="SQLite",
-                        version=getattr(module, '__version__', '0.0.0'),
-                        is_free=True,
-                        is_default=True,
-                        description=(
-                            "Default SQLite database module for QMServer. "
-                            "Provides local data storage capabilities."
-                        )
-                    )
-                else:
-                    # Update existing entry with version from loaded module if it wasn't available before
-                    installed_modules[sqlite_module_name].version = getattr(module, '__version__', '0.0.0')
-
                 logger.info(
                     f"Module '{sqlite_module_name}' dynamically loaded and initialized."
                 )
@@ -182,6 +168,15 @@ async def lifespan(app: FastAPI):
     logger.info("QMServer lifespan shutdown event triggered.")
 
 app = FastAPI(lifespan=lifespan)
+
+# Configure CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Allow your frontend origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include the API routers
 app.include_router(api.router.admin.admin_router, prefix="/api/v1")

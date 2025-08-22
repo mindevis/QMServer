@@ -22,14 +22,14 @@ installed_modules: dict[str, ModuleInfo] = {}
 
 modules_router = APIRouter()
 
-@modules_router.get("/modules", response_model=dict[str, ModuleInfo])
-async def get_modules() -> dict[str, ModuleInfo]:
-    """Returns a dictionary of all installed modules with their details.
+@modules_router.get("/modules", response_model=list[ModuleInfo])
+async def get_modules() -> list[ModuleInfo]:
+    """Returns a list of all installed modules with their details.
 
     Returns:
-        dict[str, ModuleInfo]: A dictionary where keys are module names and values are ModuleInfo objects.
+        list[ModuleInfo]: A list of ModuleInfo objects.
     """
-    return installed_modules
+    return list(installed_modules.values())
 
 @modules_router.get("/modules/{module_name}", response_model=ModuleInfo)
 async def get_module_details(module_name: str) -> ModuleInfo:
