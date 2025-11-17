@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 import api.router.admin
+import api.router.auth
 import api.router.root
 from api.router.modules import ModuleInfo, installed_modules, modules_router
 from module_manager import MODULES_ROOT_DIR, clone_or_pull_module_branch, install_module_from_repository
@@ -172,7 +173,7 @@ app = FastAPI(lifespan=lifespan)
 # Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Allow your frontend origin
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174"],  # Allow your frontend origin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -180,6 +181,7 @@ app.add_middleware(
 
 # Include the API routers
 app.include_router(api.router.admin.admin_router, prefix="/api/v1")
+app.include_router(api.router.auth.auth_router, prefix="/api/v1")
 app.include_router(modules_router, prefix="/api/v1")
 app.include_router(api.router.root.root_router, prefix="/api/v1")
 
